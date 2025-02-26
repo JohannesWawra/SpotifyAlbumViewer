@@ -275,7 +275,8 @@ class _AlbumObjectState extends State<AlbumObject>{
         DateTime currentPlayTime = DateTime.now();
         Duration difference = currentPlayTime.difference(startTrackTime);
         setState(() {
-          partPlayed = difference.inMilliseconds/ms;
+          double pp = difference.inMilliseconds/ms;
+          partPlayed = pp.remainder(1);
         });
       });
   }
