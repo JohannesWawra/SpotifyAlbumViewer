@@ -143,8 +143,10 @@ class SpotifyAuthCallback extends StatefulWidget{
 class AlbumPositionPainter extends CustomPainter {
   final int totalTracks;
   final int currentTrackNo;
+  double? inTrackPos;
+  bool didStartYet;
 
-  AlbumPositionPainter({required this.totalTracks, required this.currentTrackNo});
+  AlbumPositionPainter({required this.totalTracks, required this.currentTrackNo, required this.inTrackPos, required this.didStartYet});
 
   @override
   void paint(Canvas canvas, Size size){
@@ -156,17 +158,47 @@ class AlbumPositionPainter extends CustomPainter {
       ..color = Colors.white
       ..style = PaintingStyle.fill;
 
+    final paintPos = Paint()
+      ..color = Colors.red
+      ..style = PaintingStyle.fill;
+    final paintPosWait = Paint()
+      ..color = Color.fromRGBO(200, 0, 0, 100)
+      ..style = PaintingStyle.fill;
+
     double trackSize = size.width/totalTracks;
 
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
     final rectTrack = Rect.fromLTWH(trackSize*currentTrackNo - trackSize, 1, trackSize, size.height-1);
+
     canvas.drawRect(rect, paint);
     canvas.drawRect(rectTrack, paintTrack);
+
+    if(!didStartYet) {
+      if (inTrackPos != null) {
+        final rectPos = Rect.fromLTWH(
+            (trackSize * currentTrackNo - trackSize) + trackSize * inTrackPos! -
+                3, -1,
+            5, size.height + 3);
+        canvas.drawRect(rectPos, paintPos);
+      } else {
+        final rectPos = Rect.fromLTWH(
+            (trackSize * currentTrackNo - trackSize) - 3, -1,
+            5, size.height + 3);
+        canvas.drawRect(rectPos, paintPosWait);
+      }
+    }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate){
-    return false;
+  bool shouldRepaint(covariant AlbumPositionPainter oldDelegate){
+    bool trackChg = oldDelegate.currentTrackNo != currentTrackNo;
+    bool albmChg = oldDelegate.totalTracks != totalTracks;
+    if (trackChg || albmChg){
+      inTrackPos = null;
+    }
+    return (
+        oldDelegate.inTrackPos != inTrackPos
+    );
   }
 }
 
@@ -189,19 +221,32 @@ class _AlbumObjectState extends State<AlbumObject>{
   String releaseDate = "2003-04-01";
   int totalTracks = 0;
   int trackNo = 0;
+  int ms = 0;
+  DateTime startTrackTime = DateTime.now();
+  double partPlayed = 0;
   bool unwrap = false;
+  Timer? playTimer;
+  bool trackDidStartAlready = true;
+
+  Duration? playedMs;
+  int playedTracksMs = 0;
+  int playedTracks = 0;
+
   late Future<Uint8List> upscaledAlbumArt = _fetchAndUpscaleImage(libraryUrl, getScreenHeight() - 100, getScreenHeight() - 100);
 
   void updateData(
-  String albumName,
-  String imageUrl,
-  String currentTrack,
-  String currentArtist,
-  List<String> allArtists,
-  List<String> artistsImages,
-  String releaseDate,
-  int totalTracks,
-  int trackNo,
+      String albumName,
+      String imageUrl,
+      String currentTrack,
+      String currentArtist,
+      List<String> allArtists,
+      List<String> artistsImages,
+      String releaseDate,
+      int totalTracks,
+      int trackNo,
+      int ms,
+      bool didStart,
+      int playedTracks,
   ){
     setState(() {
       this.albumName = albumName;
@@ -213,7 +258,26 @@ class _AlbumObjectState extends State<AlbumObject>{
       this.releaseDate = releaseDate;
       this.totalTracks = totalTracks;
       this.trackNo = trackNo;
+      this.ms = ms;
+      this.trackDidStartAlready = didStart;
+      this.playedTracks = playedTracks;
     });
+  }
+
+  void startTime(DateTime startTrackTime, Duration? playedMs, int playedTracksMs){
+      this.startTrackTime = startTrackTime;
+      this.playedMs = playedMs;
+      this.playedTracksMs = playedTracksMs;
+      if(playTimer != null){
+        playTimer!.cancel();
+      }
+      playTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+        DateTime currentPlayTime = DateTime.now();
+        Duration difference = currentPlayTime.difference(startTrackTime);
+        setState(() {
+          partPlayed = difference.inMilliseconds/ms;
+        });
+      });
   }
 
   void updateAlbumArt(String url){
@@ -241,159 +305,198 @@ class _AlbumObjectState extends State<AlbumObject>{
     }
   }
 
+  String formattedPlayedTime (Duration? d) {
+    if(d == null){
+      return "";
+    }
+    String twoDigits(int n) => n.toString().padLeft(2,'0');
+    String days = d.inDays.toString();
+    String daysFormatted = "";
+    String twoDigitsHours = twoDigits(d.inHours.remainder(24));
+    String twoDigitsMinutes = twoDigits(d.inMinutes.remainder(60));
+    String twoDigitsSeconds = twoDigits(d.inSeconds.remainder(60));
+    if(d.inDays != 0){
+      daysFormatted = "$days days and ";
+    }
+    return "$daysFormatted$twoDigitsHours:$twoDigitsMinutes:$twoDigitsSeconds";
+  }
+
   @override
   Widget build(BuildContext context) {
     double screenheight = MediaQuery.of(context).size.height - 50;
     double screenwidth = MediaQuery.of(context).size.width;
     String formattedTrackNo = NumberFormat('00').format(trackNo);
     String formattedTotalTracks = NumberFormat('00').format(totalTracks);
+    String formattedPlayTimeString = formattedPlayedTime(playedMs);
+    Duration? skippedTime;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Text(
+    if(playedMs != null) {
+      skippedTime = Duration(milliseconds: playedTracksMs) - playedMs!;
+      if(skippedTime.inSeconds <= 3){
+        skippedTime = Duration(seconds: 0);
+      }
+    }
+
+    String formattedSkippedTimeString = formattedPlayedTime(skippedTime);
+
+      return Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          title: Text(
             'Spotify Album Viewer',
             style: TextStyle(
-              color: Colors.white
+                color: Colors.white
             ),
+          ),
+          backgroundColor: Colors.black,
         ),
-        backgroundColor: Colors.black,
-      ),
-      body: Center(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            Column(
+        body: Center(
+          child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      unwrap = !unwrap;
-                      updateAlbumArt(unwrap?unwrapUrl:imageUrl);
-                    });
-                  },
-                  child: FutureBuilder<Uint8List>(
-                      future: upscaledAlbumArt, 
-                      builder: (context, snapshot){
-                        if(snapshot.connectionState == ConnectionState.waiting){
-                          return Image.network(libraryUrl, height: screenheight - 50);
-                        } else if(snapshot.hasError){
-                          return Text("Error ${snapshot.error}");
-                        } else {
-                          return Image.memory(snapshot.data!);
-                        }
-                      }
-                  )
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(5.0),
-                  child: Row(
-                    children: [
-                       CustomPaint(
-                         size: Size(550, 20),
-                         painter: AlbumPositionPainter(
-                           totalTracks: totalTracks,
-                           currentTrackNo: trackNo,
-                         ),
-                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 10),
-                        child: Text(
-                          "$formattedTrackNo/$formattedTotalTracks",
-                          style: TextStyle(
-                            fontSize: 20.0,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.greenAccent,
-                          ),
-                        ),
-                      ),
-                    ]
-                  ),
-                ),
-              ],
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 400,
-                  child: Column(
-                      children: [
-                        Text(
-                            "$albumName ($releaseDate):",
-                            style: TextStyle(
-                              fontSize: 25.0,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
+                Column(
+                  children: [
+                    GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            unwrap = !unwrap;
+                            updateAlbumArt(unwrap?unwrapUrl:imageUrl);
+                          });
+                        },
+                        child: FutureBuilder<Uint8List>(
+                            future: upscaledAlbumArt,
+                            builder: (context, snapshot){
+                              if(snapshot.connectionState == ConnectionState.waiting){
+                                return Image.network(libraryUrl, height: screenheight - 50);
+                              } else if(snapshot.hasError){
+                                return Text("Error ${snapshot.error}");
+                              } else {
+                                return Image.memory(snapshot.data!);
+                              }
+                            }
+                        )
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(5.0),
+                      child: Row(
+                          children: [
+                            CustomPaint(
+                              size: Size(550, 20),
+                              painter: AlbumPositionPainter(
+                                totalTracks: totalTracks,
+                                currentTrackNo: trackNo,
+                                inTrackPos: partPlayed,
+                                didStartYet: trackDidStartAlready,
+                              ),
                             ),
-                            overflow: TextOverflow.clip,
-                            textAlign: TextAlign.center,
-                        ),
-                        Text(
-                          currentTrack,
-                          style: TextStyle(
-                            fontSize: 45.0,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.yellow,
-                          ),
-                          overflow: TextOverflow.clip,
-                          textAlign: TextAlign.center,
-                        ),
-                        Text(
-                          "($currentArtist)",
-                          style: TextStyle(
-                            fontSize: 42.0,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red,
-                          ),
-                         overflow: TextOverflow.clip,
-                         textAlign: TextAlign.center,
-                        ),
-                      ],
-                    )
+                            Padding(
+                              padding: const EdgeInsets.only(left: 10),
+                              child: Text(
+                                "$formattedTrackNo/$formattedTotalTracks",
+                                style: TextStyle(
+                                  fontSize: 20.0,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.greenAccent,
+                                ),
+                              ),
+                            ),
+                          ]
+                      ),
+                    ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                        width: 400,
+                        child: Column(
+                          children: [
+                            Text(
+                              "$playedTracks in $formattedPlayTimeString skipped $formattedSkippedTimeString",
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.greenAccent,
+                              ),
+                              overflow: TextOverflow.clip,
+                              textAlign: TextAlign.center,
+                            ),
+                            Text(
+                              "$albumName ($releaseDate):",
+                              style: TextStyle(
+                                fontSize: 25.0,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                              overflow: TextOverflow.clip,
+                              textAlign: TextAlign.center,
+                            ),
+                            Text(
+                              currentTrack,
+                              style: TextStyle(
+                                fontSize: 45.0,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.yellow,
+                              ),
+                              overflow: TextOverflow.clip,
+                              textAlign: TextAlign.center,
+                            ),
+                            Text(
+                              "($currentArtist)",
+                              style: TextStyle(
+                                fontSize: 42.0,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red,
+                              ),
+                              overflow: TextOverflow.clip,
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        )
+                    ),
+                    SizedBox(
+                      height: 200,
+                      width: 200,
+                      child: ListView.builder(
+                          itemCount: allArtists.length-1,
+                          itemBuilder: (context, index){
+                            return Padding(
+                              padding: const EdgeInsets.all(1.0),
+                              child: Text(
+                                allArtists[index+1],
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                            );
+                          }
+                      ),
+                    ),
+                  ],
                 ),
                 SizedBox(
-                  height: 200,
-                  width: 200,
+                  width: 300,
                   child: ListView.builder(
-                      itemCount: allArtists.length-1,
+                      itemCount: artistsImages.length,
                       itemBuilder: (context, index){
                         return Padding(
                           padding: const EdgeInsets.all(1.0),
-                          child: Text(
-                            allArtists[index+1],
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: Colors.orange,
-                            ),
+                          child: Image.network(
+                            artistsImages[index],
+                            height: screenheight/artistsImages.length,
                           ),
                         );
                       }
                   ),
                 ),
-              ],
-            ),
-            SizedBox(
-              width: 300,
-              child: ListView.builder(
-                    itemCount: artistsImages.length,
-                    itemBuilder: (context, index){
-                      return Padding(
-                       padding: const EdgeInsets.all(1.0),
-                       child: Image.network(
-                         artistsImages[index],
-                         height: screenheight/artistsImages.length,
-                       ),
-                      );
-                    }
-                ),
-            ),
-          ]
+              ]
+          ),
         ),
-      ),
-    );
-  }
+      );
+    }
 }
 
 class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
@@ -414,6 +517,9 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
   String releaseDate = "2003-04-01";
   int totalTracks = 0;
   int trackNo = 0;
+  int millisecondsOfCurrentTrack = 0;
+  int millisecondsOfPlayedTracks = 0;
+  int playedTracks = 0;
 
   final GlobalKey<_AlbumObjectState> albumKey = GlobalKey<_AlbumObjectState>();
 
@@ -440,6 +546,20 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
     });
 
         _currentTrack.addListener(() async{
+          Duration? msPlaytime;
+          playedTracks++;
+
+          if(playedTracks == 2) {
+            _currentTime = DateTime.now();
+          }
+          if(playedTracks >= 2){
+            msPlaytime = DateTime.now().difference(_currentTime);
+          }
+          albumKey.currentState?.startTime(DateTime.now(), msPlaytime, millisecondsOfPlayedTracks);
+          if(playedTracks >= 2){
+            millisecondsOfPlayedTracks += millisecondsOfCurrentTrack;
+          }
+
           await fetchCurrentArtistImages();
           setState(() {
           });
@@ -453,8 +573,11 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
 
   void getCurrentTrack() async {
     await fetchCurrentTrack();
+    bool didStart = playedTracks <= 1;
+
     albumKey.currentState?.updateData(
-        _albumName, _albumImage.value, _currentTrack.value, _currentArtist, _artistNames, _artistImages, releaseDate, totalTracks, trackNo);
+        _albumName, _albumImage.value, _currentTrack.value, _currentArtist, _artistNames, _artistImages, releaseDate,
+        totalTracks, trackNo, millisecondsOfCurrentTrack, didStart, playedTracks);
     setState(() => {
     });
 
@@ -527,6 +650,7 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
       });
       _currentArtist = _artistNames[0];
       trackNo = jsonDecode(responseCurrentlyPlaying.body)['item']['track_number'];
+      millisecondsOfCurrentTrack = jsonDecode(responseCurrentlyPlaying.body)['item']['duration_ms'];
       _currentTrack.value = jsonDecode(responseCurrentlyPlaying.body)['item']['name'];
 
       return '200';
