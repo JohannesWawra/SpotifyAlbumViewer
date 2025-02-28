@@ -96,7 +96,7 @@ class _SpotifyAuthState extends State<SpotifyAuth> {
 
   Future<void> login() async {
     final state = generateRandomString(16);
-    final scope = 'user-read-currently-playing';
+    final scope = 'user-read-playback-state';
     final url = Uri.https('accounts.spotify.com', '/authorize', {
       'response_type': 'code',
       'client_id': clientId,
@@ -223,10 +223,12 @@ class _AlbumObjectState extends State<AlbumObject>{
   int trackNo = 0;
   int ms = 0;
   DateTime startTrackTime = DateTime.now();
+  Duration pauseTime = Duration(seconds: 0);
   double partPlayed = 0;
   bool unwrap = false;
   Timer? playTimer;
   bool trackDidStartAlready = true;
+  bool isPlaying = false;
 
   Duration? playedMs;
   int playedTracksMs = 0;
@@ -247,6 +249,7 @@ class _AlbumObjectState extends State<AlbumObject>{
       int ms,
       bool didStart,
       int playedTracks,
+      bool isPlaying,
   ){
     setState(() {
       this.albumName = albumName;
@@ -261,6 +264,7 @@ class _AlbumObjectState extends State<AlbumObject>{
       this.ms = ms;
       this.trackDidStartAlready = didStart;
       this.playedTracks = playedTracks;
+      this.isPlaying = isPlaying;
     });
   }
 
@@ -268,16 +272,21 @@ class _AlbumObjectState extends State<AlbumObject>{
       this.startTrackTime = startTrackTime;
       this.playedMs = playedMs;
       this.playedTracksMs = playedTracksMs;
+      pauseTime = Duration(seconds: 0);
       if(playTimer != null){
         playTimer!.cancel();
       }
       playTimer = Timer.periodic(Duration(seconds: 1), (timer) {
         DateTime currentPlayTime = DateTime.now();
-        Duration difference = currentPlayTime.difference(startTrackTime);
-        setState(() {
-          double pp = difference.inMilliseconds/ms;
-          partPlayed = pp.remainder(1);
-        });
+        if(isPlaying) {
+          Duration difference = currentPlayTime.difference(startTrackTime.add(pauseTime));
+          setState(() {
+            double pp = difference.inMilliseconds / ms;
+            partPlayed = pp.remainder(1);
+          });
+        } else {
+          pauseTime += Duration(seconds: 1);
+        }
       });
   }
 
@@ -521,6 +530,7 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
   int millisecondsOfCurrentTrack = 0;
   int millisecondsOfPlayedTracks = 0;
   int playedTracks = 0;
+  bool isPlaying = false;
 
   final GlobalKey<_AlbumObjectState> albumKey = GlobalKey<_AlbumObjectState>();
 
@@ -578,7 +588,7 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
 
     albumKey.currentState?.updateData(
         _albumName, _albumImage.value, _currentTrack.value, _currentArtist, _artistNames, _artistImages, releaseDate,
-        totalTracks, trackNo, millisecondsOfCurrentTrack, didStart, playedTracks);
+        totalTracks, trackNo, millisecondsOfCurrentTrack, didStart, playedTracks, isPlaying);
     setState(() => {
     });
 
@@ -627,7 +637,7 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
       'type': 'track',
       'limit': '1',
     }); */
-    final currentlyPlayingUrl = Uri.https('api.spotify.com','/v1/me/player/currently-playing');
+    final currentlyPlayingUrl = Uri.https('api.spotify.com','/v1/me/player');
 
     final headers = {
       'Authorization': 'Bearer $accessToken',
@@ -653,6 +663,7 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
       trackNo = jsonDecode(responseCurrentlyPlaying.body)['item']['track_number'];
       millisecondsOfCurrentTrack = jsonDecode(responseCurrentlyPlaying.body)['item']['duration_ms'];
       _currentTrack.value = jsonDecode(responseCurrentlyPlaying.body)['item']['name'];
+      isPlaying = jsonDecode(responseCurrentlyPlaying.body)['is_playing'];
 
       return '200';
     }
