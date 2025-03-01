@@ -255,7 +255,7 @@ class _AlbumObjectState extends State<AlbumObject>{
   bool trackDidStartAlready = true;
   bool isPlaying = false;
   List<int>? playtimes;
-  String modePlaytime = "Track";
+  String modePlaytime = "album";
 
   Duration? playedMs;
   int playedTracksMs = 0;
@@ -323,10 +323,9 @@ class _AlbumObjectState extends State<AlbumObject>{
     });
   }
 
-  void updatePlaytimes(List<int> playtimes){
+  void updatePlaytimes(List<int>? playtimes){
     setState((){
       this.playtimes = playtimes;
-      modePlaytime = "album";
     });
   }
 
@@ -615,10 +614,11 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
         });
 
         _albumImage.addListener(() async {
-          albumKey.currentState?.updateAlbumArt(_albumImage.value);
+          albumKey.currentState?.updatePlaytimes(null);
           await(_albumId == "");
           List<int>playtimes = await getAlbumTrackPlaytimes(_albumId);
           albumKey.currentState?.updatePlaytimes(playtimes);
+          albumKey.currentState?.updateAlbumArt(_albumImage.value);
         });
 
   }
