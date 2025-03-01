@@ -145,8 +145,10 @@ class AlbumPositionPainter extends CustomPainter {
   final int currentTrackNo;
   double? inTrackPos;
   bool didStartYet;
+  String modePlaytime;
+  List<int>? playtimes;
 
-  AlbumPositionPainter({required this.totalTracks, required this.currentTrackNo, required this.inTrackPos, required this.didStartYet});
+  AlbumPositionPainter({required this.totalTracks, required this.currentTrackNo, required this.inTrackPos, required this.didStartYet, this.playtimes, required this.modePlaytime});
 
   @override
   void paint(Canvas canvas, Size size){
@@ -166,9 +168,32 @@ class AlbumPositionPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     double trackSize = size.width/totalTracks;
+    double startSize = trackSize*currentTrackNo - trackSize;
 
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final rectTrack = Rect.fromLTWH(trackSize*currentTrackNo - trackSize, 1, trackSize, size.height-1);
+    if(modePlaytime == 'album' && playtimes != null){
+      int totalTime = 0;
+      int startTime = 0;
+      for(int i = 0; i<playtimes!.length; i++) {
+        totalTime += playtimes![i];
+        if(i<currentTrackNo-1){
+          startTime += playtimes![i];
+        }
+      }
+
+      int trackStartTime = 0;
+      for(int i = 0; i<playtimes!.length-1; i++) {
+        trackStartTime += playtimes![i];
+        final trackStartSize = size.width*(trackStartTime/totalTime);
+        final rectAllTracks = Rect.fromLTWH(trackStartSize, 1, 1, size.height-1);
+        canvas.drawRect(rectAllTracks, paintTrack);
+      }
+
+        int currentPlaytime = playtimes![currentTrackNo - 1];
+        trackSize = size.width*(currentPlaytime/totalTime);
+        startSize = size.width*(startTime/totalTime);
+    }
+    final rectTrack = Rect.fromLTWH(startSize, 1, trackSize, size.height-1);
 
     canvas.drawRect(rect, paint);
     canvas.drawRect(rectTrack, paintTrack);
@@ -176,13 +201,12 @@ class AlbumPositionPainter extends CustomPainter {
     if(!didStartYet) {
       if (inTrackPos != null) {
         final rectPos = Rect.fromLTWH(
-            (trackSize * currentTrackNo - trackSize) + trackSize * inTrackPos! -
-                3, -1,
+            startSize + trackSize * inTrackPos! - 3, -1,
             5, size.height + 3);
         canvas.drawRect(rectPos, paintPos);
       } else {
         final rectPos = Rect.fromLTWH(
-            (trackSize * currentTrackNo - trackSize) - 3, -1,
+            startSize - 3, -1,
             5, size.height + 3);
         canvas.drawRect(rectPos, paintPosWait);
       }
@@ -197,7 +221,8 @@ class AlbumPositionPainter extends CustomPainter {
       inTrackPos = null;
     }
     return (
-        oldDelegate.inTrackPos != inTrackPos
+        (oldDelegate.inTrackPos != inTrackPos)
+            || (oldDelegate.playtimes != playtimes)
     );
   }
 }
@@ -229,6 +254,8 @@ class _AlbumObjectState extends State<AlbumObject>{
   Timer? playTimer;
   bool trackDidStartAlready = true;
   bool isPlaying = false;
+  List<int>? playtimes;
+  String modePlaytime = "Track";
 
   Duration? playedMs;
   int playedTracksMs = 0;
@@ -293,6 +320,13 @@ class _AlbumObjectState extends State<AlbumObject>{
   void updateAlbumArt(String url){
     setState((){
       upscaledAlbumArt = _fetchAndUpscaleImage(url, getScreenHeight() - 100, getScreenHeight() - 100);
+    });
+  }
+
+  void updatePlaytimes(List<int> playtimes){
+    setState((){
+      this.playtimes = playtimes;
+      modePlaytime = "album";
     });
   }
 
@@ -397,6 +431,8 @@ class _AlbumObjectState extends State<AlbumObject>{
                                 currentTrackNo: trackNo,
                                 inTrackPos: partPlayed,
                                 didStartYet: trackDidStartAlready,
+                                playtimes: playtimes,
+                                modePlaytime: modePlaytime,
                               ),
                             ),
                             Padding(
@@ -518,6 +554,7 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
   String refreshToken = "";
   ValueNotifier<String> _currentTrack = ValueNotifier<String>("NOT LOADED YET.");
   String _albumName = "NOT LOADED YET.";
+  String _albumId = "";
   ValueNotifier<String> _albumImage = ValueNotifier<String>("");
   final List<String> _artistImages = List<String>.filled(0,'', growable: true);
   String _currentArtist = "NOT LOADED YET";
@@ -531,6 +568,8 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
   int millisecondsOfPlayedTracks = 0;
   int playedTracks = 0;
   bool isPlaying = false;
+  Map<String,String>? headers;
+
 
   final GlobalKey<_AlbumObjectState> albumKey = GlobalKey<_AlbumObjectState>();
 
@@ -543,7 +582,6 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
         clientSecret = widget.clientSecret!;
         redirectUri = widget.redirectUri!;
         getSpotifyToken(widget.code!);
-
     } else {
       print('AUTHORIZATION NOT FOUND');
     }
@@ -576,11 +614,15 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
           });
         });
 
-        _albumImage.addListener(() {
+        _albumImage.addListener(() async {
           albumKey.currentState?.updateAlbumArt(_albumImage.value);
+          await(_albumId == "");
+          List<int>playtimes = await getAlbumTrackPlaytimes(_albumId);
+          albumKey.currentState?.updatePlaytimes(playtimes);
         });
 
   }
+
 
   void getCurrentTrack() async {
     await fetchCurrentTrack();
@@ -594,10 +636,21 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
 
   }
 
+  Future<List<int>> getAlbumTrackPlaytimes(String albumId) async {
+    final List<int> _tracks_in_ms = List<int>.filled(0,0,growable: true);
+    final albumUrl = Uri.https('api.spotify.com', '/v1/albums/$albumId');
+    final response = await http.get(albumUrl, headers: headers);
+
+    if (response.statusCode == 200){
+      for (int i = 0; i < totalTracks; i++){
+        _tracks_in_ms.add(jsonDecode(response.body)['tracks']['items'][i]['duration_ms']);
+      }
+    }
+    return _tracks_in_ms;
+  }
 
   Future<void> fetchCurrentArtistImages() async{
     bool changed = false;
-
     _artistIDs.forEach((id) =>
       {
         if(!_lastArtistIDs.contains(id)){
@@ -610,10 +663,6 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
     changed = changed || !_lastArtistIDs.isEmpty;
 
     if(changed) {
-      final headers = {
-        'Authorization': 'Bearer $accessToken',
-      };
-
       List<String> updatedImages = List<String>.filled(0,'',growable: true);
       print("GETT  IMMMAGGESS");
       for (int i = 0; i<_artistIDs.length; i++) {
@@ -639,15 +688,13 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
     }); */
     final currentlyPlayingUrl = Uri.https('api.spotify.com','/v1/me/player');
 
-    final headers = {
-      'Authorization': 'Bearer $accessToken',
-    };
     //final responseTrack = await http.get(url, headers: headers);
     final responseCurrentlyPlaying = await http.get(currentlyPlayingUrl, headers: headers);
     //print(responseCurrentlyPlaying.body);
     if(responseCurrentlyPlaying.statusCode == 200){
       _albumName = jsonDecode(responseCurrentlyPlaying.body)['item']['album']['name'];
       _albumImage.value = jsonDecode(responseCurrentlyPlaying.body)['item']['album']['images'][0]['url'];
+      _albumId = jsonDecode(responseCurrentlyPlaying.body)['item']['album']['id'];
       releaseDate = jsonDecode(responseCurrentlyPlaying.body)['item']['album']['release_date'];
       totalTracks = jsonDecode(responseCurrentlyPlaying.body)['item']['album']['total_tracks'];
       List<dynamic> artists = jsonDecode(responseCurrentlyPlaying.body)['item']['artists'];
@@ -716,6 +763,10 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
       refreshToken = newRefreshToken;
       accessToken = newAccessToken;
 
+      this.headers = {
+        'Authorization': 'Bearer $accessToken',
+      };
+
       int _start = body['expires_in'];
       DateTime nxt = DateTime.now().add(Duration(seconds: _start));
       print('nextRefreshing at $nxt');
@@ -752,7 +803,10 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
       final newAccessToken = body['access_token'];
       print('refreshed access token $newAccessToken');
       accessToken = newAccessToken;
-      print(response.body);
+
+      this.headers = {
+        'Authorization': 'Bearer $accessToken',
+      };
 
       int _start = body['expires_in'];
       DateTime nxt = DateTime.now().add(Duration(seconds: _start));
