@@ -42,10 +42,10 @@ dev_dependencies:
     sdk: flutter
   flutter_test:
     sdk: flutter
-  flutter_web_plugins:
-    sdk: flutter
-  intl: ^0.17.0
-  image: ^3.0.1
+  webview_win_floating: ^2.2.9
+  webview_flutter: ^4.0.1
+  intl: ^0.20.2
+  image: ^4.5.3
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
