@@ -1,16 +1,9 @@
-# untitled
+How to start web on linux:
 
-A new Flutter project.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+1. Install flutter: https://docs.flutter.dev/get-started/install/linux
+2. open a terminal in your downloaded SpotifyAlbumViewer File
+3. Make sure flutter is installed by enter:
+   which flutter
+   (you should see a file of your flutter installation)
+4. Enter into Terminal:
+   SpotifyAlbumViewer-master$ flutter run -d chrome --web-port 8888
