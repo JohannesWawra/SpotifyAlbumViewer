@@ -15,35 +15,19 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
-
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context){
     return MaterialApp(
-      title: 'Spotify Album Viewer',
+      title: "Spotify Album Viewer",
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightGreen),
+        primarySwatch: Colors.green,
       ),
       onGenerateRoute: _onGenerateRoute,
     );
   }
+}
 
   Route<dynamic> _onGenerateRoute(RouteSettings settings){
     final String clientId = "981553fa76a846a0898364161fb1f2fa";
@@ -60,12 +44,52 @@ class MyApp extends StatelessWidget {
     }
     return MaterialPageRoute(builder: (context) => SpotifyAuth(clientId: clientId, clientSecret: clientSecret, redirectUri: redirectUri));
   }
+
+/*class MyWebView extends StatefulWidget {
+  final String clientId = "981553fa76a846a0898364161fb1f2fa";
+  final String clientSecret = '63ac0627a72b4828ab884b3f7f0de482';
+  final String redirectUri = 'http://localhost:8888/callback';
+
+  @override
+  _MyWebViewState createState() => _MyWebViewState();
 }
+
+class _MyWebViewState extends State<MyWebView> {
+  WebViewController _controller = WebViewController();
+  String currentUrl = 'https://localhost:8888';
+
+  @override
+  void initState(){
+    super.initState();
+    _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+
+    final uri = Uri.parse(currentUrl);
+    final comparedUri = Uri.parse('https://localhost:8888');
+    if (uri == comparedUri) {
+      SpotifyAuth(clientId: widget.clientId,
+        clientSecret: widget.clientSecret,
+        redirectUri: widget.redirectUri,
+        controller: _controller,);
+    } else {
+      final code = uri.queryParameters['code'];
+      final state = uri.queryParameters['state'];
+      SpotifyAuthCallback(code: code, state: state, clientId: widget.clientId, clientSecret: widget.clientSecret, redirectUri: widget.redirectUri);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context){
+    return Scaffold(
+      body: WebViewWidget(controller: _controller),
+    );
+  }
+}*/
 
 class SpotifyAuth extends StatefulWidget {
   final String? clientId;
   final String? clientSecret;
   final String? redirectUri;
+  //WebViewController controller;
 
   SpotifyAuth({this.clientId, this.clientSecret, this.redirectUri});
 
@@ -74,9 +98,6 @@ class SpotifyAuth extends StatefulWidget {
 }
 
 class _SpotifyAuthState extends State<SpotifyAuth> {
-  String? clientId = "";
-  String? clientSecret = "";
-  String? redirectUri = "";
 
   String generateRandomString(int length) {
     const characters = 'qwertzuipasdfghjklyxcvbnmQWERTZUIOPASDFGHJKLYXCVBNM0123456789';
@@ -89,9 +110,6 @@ class _SpotifyAuthState extends State<SpotifyAuth> {
   @override
   void initState() {
     super.initState();
-    clientId = widget.clientId;
-    clientSecret = widget.clientSecret;
-    redirectUri = widget.redirectUri;
   }
 
   Future<void> login() async {
@@ -99,9 +117,9 @@ class _SpotifyAuthState extends State<SpotifyAuth> {
     final scope = 'user-read-playback-state';
     final url = Uri.https('accounts.spotify.com', '/authorize', {
       'response_type': 'code',
-      'client_id': clientId,
+      'client_id': widget.clientId,
       'scope': scope,
-      'redirect_uri': redirectUri,
+      'redirect_uri': widget.redirectUri,
       'state': state,
     });
 
@@ -256,12 +274,29 @@ class _AlbumObjectState extends State<AlbumObject>{
   bool isPlaying = false;
   List<int>? playtimes;
   String modePlaytime = "album";
+  double fontsizeSkipped = 15;
+  double fontsizeAlbum = 25;
+  double fontsizeTrack = 45;
+  double fontsizeArtist = 40;
+  double fontsizeCoArtist = 25;
+  ValueNotifier<double> screenHeight = ValueNotifier<double>(0);
+  bool loaded = false;
 
   Duration? playedMs;
   int playedTracksMs = 0;
   int playedTracks = 0;
 
-  late Future<Uint8List> upscaledAlbumArt = _fetchAndUpscaleImage(libraryUrl, getScreenHeight() - 100, getScreenHeight() - 100);
+  late Future<Uint8List> upscaledAlbumArt = _fetchAndUpscaleImage(libraryUrl, screenHeight.value.toInt() - 100, screenHeight.value.toInt() - 100);
+
+  void initState(){
+    super.initState();
+    screenHeight.addListener(() async {
+      loaded = false;
+      await(imageUrl == "NOT LOADED YET");
+      await(Duration(seconds: 1));
+      upscaledAlbumArt = _fetchAndUpscaleImage(imageUrl, screenHeight.value.toInt() - 100, screenHeight.value.toInt() - 100);
+    });
+  }
 
   void updateData(
       String albumName,
@@ -317,9 +352,10 @@ class _AlbumObjectState extends State<AlbumObject>{
       });
   }
 
-  void updateAlbumArt(String url){
+  void updateAlbumArt(String url, bool unwrap){
     setState((){
-      upscaledAlbumArt = _fetchAndUpscaleImage(url, getScreenHeight() - 100, getScreenHeight() - 100);
+      this.unwrap = unwrap;
+      upscaledAlbumArt = _fetchAndUpscaleImage(url, screenHeight.value.toInt() - 100, screenHeight.value.toInt() - 100);
     });
   }
 
@@ -329,18 +365,17 @@ class _AlbumObjectState extends State<AlbumObject>{
     });
   }
 
-  int getScreenHeight() {
-    double doubleValue = WidgetsBinding.instance.window.physicalSize.height /
-        WidgetsBinding.instance.window.devicePixelRatio;
-    return doubleValue.toInt();
-  }
-
   Future<Uint8List> _fetchAndUpscaleImage(String url, int newWidth, int newHeight) async {
+    if(unwrap){
+      url = unwrapUrl;
+    }
+
     final response = await http.get(Uri.parse(url));
     if(response.statusCode == 200){
       img.Image image = img.decodeImage(response.bodyBytes)!;
       img.Image resized = img.copyResize(image, width: newWidth, height: newHeight);
       Uint8List upscaleImageBytes = Uint8List.fromList(img.encodeJpg(resized));
+      loaded = true;
       return upscaleImageBytes;
     }
     else {
@@ -366,8 +401,7 @@ class _AlbumObjectState extends State<AlbumObject>{
 
   @override
   Widget build(BuildContext context) {
-    double screenheight = MediaQuery.of(context).size.height - 50;
-    double screenwidth = MediaQuery.of(context).size.width;
+    screenHeight.value = MediaQuery.of(context).size.height;
     String formattedTrackNo = NumberFormat('00').format(trackNo);
     String formattedTotalTracks = NumberFormat('00').format(totalTracks);
     String formattedPlayTimeString = formattedPlayedTime(playedMs);
@@ -403,14 +437,17 @@ class _AlbumObjectState extends State<AlbumObject>{
                         onTap: () {
                           setState(() {
                             unwrap = !unwrap;
-                            updateAlbumArt(unwrap?unwrapUrl:imageUrl);
+                            updateAlbumArt(imageUrl, unwrap);
                           });
                         },
                         child: FutureBuilder<Uint8List>(
                             future: upscaledAlbumArt,
                             builder: (context, snapshot){
+                              if(!loaded){
+                                return Image.network(libraryUrl, height: screenHeight.value - 100,);
+                              }
                               if(snapshot.connectionState == ConnectionState.waiting){
-                                return Image.network(libraryUrl, height: screenheight - 50);
+                                return Image.network(libraryUrl, height: screenHeight.value - 100);
                               } else if(snapshot.hasError){
                                 return Text("Error ${snapshot.error}");
                               } else {
@@ -419,33 +456,46 @@ class _AlbumObjectState extends State<AlbumObject>{
                             }
                         )
                     ),
-                    Padding(
-                      padding: const EdgeInsets.all(5.0),
-                      child: Row(
-                          children: [
-                            CustomPaint(
-                              size: Size(550, 20),
-                              painter: AlbumPositionPainter(
-                                totalTracks: totalTracks,
-                                currentTrackNo: trackNo,
-                                inTrackPos: partPlayed,
-                                didStartYet: trackDidStartAlready,
-                                playtimes: playtimes,
-                                modePlaytime: modePlaytime,
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(left: 10),
-                              child: Text(
-                                "$formattedTrackNo/$formattedTotalTracks",
-                                style: TextStyle(
-                                  fontSize: 20.0,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.greenAccent,
+                    GestureDetector(
+                      onTap: () {
+                          if(modePlaytime == "album"){
+                            setState(() {
+                              modePlaytime = "track";
+                            });
+                          } else {
+                            setState(() {
+                              modePlaytime = "album";
+                            });
+                          }
+                        },
+                      child:Padding(
+                        padding: const EdgeInsets.all(5.0),
+                        child: Row(
+                            children: [
+                              CustomPaint(
+                                size: Size(screenHeight.value-150, 20),
+                                painter: AlbumPositionPainter(
+                                  totalTracks: totalTracks,
+                                  currentTrackNo: trackNo,
+                                  inTrackPos: partPlayed,
+                                  didStartYet: trackDidStartAlready,
+                                  playtimes: playtimes,
+                                  modePlaytime: modePlaytime,
                                 ),
                               ),
-                            ),
-                          ]
+                              Padding(
+                                padding: const EdgeInsets.only(left: 10),
+                                child: Text(
+                                  "$formattedTrackNo/$formattedTotalTracks",
+                                  style: TextStyle(
+                                    fontSize: 20.0,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.greenAccent,
+                                  ),
+                                ),
+                              ),
+                            ]
+                        ),
                       ),
                     ),
                   ],
@@ -458,45 +508,73 @@ class _AlbumObjectState extends State<AlbumObject>{
                         width: 400,
                         child: Column(
                           children: [
-                            Text(
+                          GestureDetector(
+                            onVerticalDragUpdate: (DragUpdateDetails details) {
+                              setState(() {
+                                fontsizeSkipped = details.localPosition.dy;
+                              });
+                            },
+                            child: Text(
                               "$playedTracks in $formattedPlayTimeString skipped $formattedSkippedTimeString",
                               style: TextStyle(
-                                fontSize: 15,
+                                fontSize: fontsizeSkipped,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.greenAccent,
                               ),
                               overflow: TextOverflow.clip,
                               textAlign: TextAlign.center,
                             ),
-                            Text(
-                              "$albumName ($releaseDate):",
-                              style: TextStyle(
-                                fontSize: 25.0,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green,
+                          ),
+                          GestureDetector(
+                            onVerticalDragUpdate: (DragUpdateDetails details) {
+                              setState(() {
+                                fontsizeAlbum = details.localPosition.dy;
+                              });
+                            },
+                            child: Text(
+                                "$albumName ($releaseDate):",
+                                style: TextStyle(
+                                  fontSize: fontsizeAlbum,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green,
+                                ),
+                                overflow: TextOverflow.clip,
+                                textAlign: TextAlign.center,
                               ),
-                              overflow: TextOverflow.clip,
-                              textAlign: TextAlign.center,
                             ),
-                            Text(
+                            GestureDetector(
+                            onVerticalDragUpdate: (DragUpdateDetails details) {
+                              setState(() {
+                                fontsizeTrack = details.localPosition.dy;
+                              });
+                            },
+                            child: Text(
                               currentTrack,
-                              style: TextStyle(
-                                fontSize: 45.0,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.yellow,
+                                style: TextStyle(
+                                  fontSize: fontsizeTrack,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.yellow,
+                                ),
+                                overflow: TextOverflow.clip,
+                                textAlign: TextAlign.center,
                               ),
-                              overflow: TextOverflow.clip,
-                              textAlign: TextAlign.center,
                             ),
-                            Text(
-                              "($currentArtist)",
-                              style: TextStyle(
-                                fontSize: 42.0,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.red,
+                            GestureDetector(
+                              onVerticalDragUpdate: (DragUpdateDetails details) {
+                                setState(() {
+                                  fontsizeArtist = details.localPosition.dy;
+                                });
+                              },
+                            child: Text(
+                                "($currentArtist)",
+                                style: TextStyle(
+                                  fontSize: fontsizeArtist,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red,
+                                ),
+                                overflow: TextOverflow.clip,
+                                textAlign: TextAlign.center,
                               ),
-                              overflow: TextOverflow.clip,
-                              textAlign: TextAlign.center,
                             ),
                           ],
                         )
@@ -504,7 +582,14 @@ class _AlbumObjectState extends State<AlbumObject>{
                     SizedBox(
                       height: 200,
                       width: 200,
-                      child: ListView.builder(
+                      child:
+                      GestureDetector(
+                        onVerticalDragUpdate: (DragUpdateDetails details) {
+                          setState(() {
+                            fontsizeCoArtist = details.localPosition.dy;
+                          });
+                        },
+                        child: ListView.builder(
                           itemCount: allArtists.length-1,
                           itemBuilder: (context, index){
                             return Padding(
@@ -512,12 +597,13 @@ class _AlbumObjectState extends State<AlbumObject>{
                               child: Text(
                                 allArtists[index+1],
                                 style: TextStyle(
-                                  fontSize: 20,
+                                  fontSize: fontsizeCoArtist,
                                   color: Colors.orange,
                                 ),
                               ),
                             );
                           }
+                        ),
                       ),
                     ),
                   ],
@@ -531,7 +617,7 @@ class _AlbumObjectState extends State<AlbumObject>{
                           padding: const EdgeInsets.all(1.0),
                           child: Image.network(
                             artistsImages[index],
-                            height: screenheight/artistsImages.length,
+                            height: (screenHeight.value - 80)/artistsImages.length,
                           ),
                         );
                       }
@@ -569,12 +655,12 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
   bool isPlaying = false;
   Map<String,String>? headers;
 
-
   final GlobalKey<_AlbumObjectState> albumKey = GlobalKey<_AlbumObjectState>();
 
   @override
   void initState() {
     super.initState();
+
     if(widget.code != null){
       print('get Token');
         clientId = widget.clientId!;
@@ -618,7 +704,7 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
           await(_albumId == "");
           List<int>playtimes = await getAlbumTrackPlaytimes(_albumId);
           albumKey.currentState?.updatePlaytimes(playtimes);
-          albumKey.currentState?.updateAlbumArt(_albumImage.value);
+          albumKey.currentState?.updateAlbumArt(_albumImage.value, false);
         });
 
   }
@@ -788,6 +874,7 @@ class _SpotifyAuthCallbackState extends State<SpotifyAuthCallback> {
           utf8.encode('$clientId:$clientSecret'))}',
     };
     final body = {
+      'grant_type': 'refresh_token',
       'grant_type': 'refresh_token',
       'refresh_token': refreshToken,
     };
