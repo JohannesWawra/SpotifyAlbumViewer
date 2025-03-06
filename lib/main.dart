@@ -281,6 +281,7 @@ class _AlbumObjectState extends State<AlbumObject>{
   double fontsizeCoArtist = 25;
   ValueNotifier<double> screenHeight = ValueNotifier<double>(0);
   bool loaded = false;
+  double artistsSize = 200;
 
   Duration? playedMs;
   int playedTracksMs = 0;
@@ -505,7 +506,7 @@ class _AlbumObjectState extends State<AlbumObject>{
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     SizedBox(
-                        width: 400,
+                        width: 800 - artistsSize,
                         child: Column(
                           children: [
                           GestureDetector(
@@ -609,8 +610,14 @@ class _AlbumObjectState extends State<AlbumObject>{
                   ],
                 ),
                 SizedBox(
-                  width: 300,
-                  child: ListView.builder(
+                  width: artistsSize,
+                  child: GestureDetector(
+                    onHorizontalDragUpdate: (DragUpdateDetails details) {
+                      setState( () {
+                        artistsSize = 200 - details.localPosition.dx;
+                      });
+                    },
+                    child: ListView.builder(
                       itemCount: artistsImages.length,
                       itemBuilder: (context, index){
                         return Padding(
@@ -621,6 +628,7 @@ class _AlbumObjectState extends State<AlbumObject>{
                           ),
                         );
                       }
+                    ),
                   ),
                 ),
               ]
