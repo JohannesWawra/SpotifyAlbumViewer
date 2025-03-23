@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
+import 'package:flutter/services.dart';
 
 void main() {
   setUrlStrategy(PathUrlStrategy());
@@ -326,7 +327,7 @@ class _AlbumObjectState extends State<AlbumObject>{
       this.trackNo = trackNo;
       this.ms = ms;
       this.trackDidStartAlready = didStart;
-      this.playedTracks = playedTracks;
+      this.playedTracks = playedTracks - 2;
       this.isPlaying = isPlaying;
     });
   }
@@ -582,7 +583,7 @@ class _AlbumObjectState extends State<AlbumObject>{
                     ),
                     SizedBox(
                       width: 200,
-                      height: (allArtists.length - 1)*fontsizeCoArtist,
+                      height: (allArtists.length)*fontsizeCoArtist*1.5,
                       child:
                       GestureDetector(
                         onVerticalDragUpdate: (DragUpdateDetails details) {
@@ -607,6 +608,24 @@ class _AlbumObjectState extends State<AlbumObject>{
                         ),
                       ),
                     ),
+                    SizedBox(
+                        height: 50,
+                        width: 100,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: "$albumName: $currentTrack by $currentArtist"));
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color.fromRGBO(0, 1, 0, 0),
+                            overlayColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            shadowColor: Colors.white,
+                            iconColor: Colors.white,
+                            fixedSize: Size(100, 100),
+                          ),
+                          child: const Text('copy'),
+                        )
+                    )
                   ],
                 ),
                 SizedBox(
