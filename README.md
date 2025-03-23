@@ -9,7 +9,7 @@ How to start web on linux:
    which google-chrome
    (you should see a file of your chrome version)
 5. Enter into Terminal:
-   .../SpotifyAlbumViewer-master$ flutter run -d chrome --web-port 8888
+   .../SpotifyAlbumViewer-master$ flutter run -d chrome --web-port 8888 --release
 
 How to start web on windows:
 
@@ -22,6 +22,6 @@ How to start web on windows:
    or
    edge --version
 4. Enter into Terminal
-   ...\SpotifyAlbumViewer> flutter run -d chrome --web-port 8888
-   or ...\SpotifyAlbumViewer> flutter run -d edge --web-port 8888
+   ...\SpotifyAlbumViewer> flutter run -d chrome --web-port 8888 --release
+   or ...\SpotifyAlbumViewer> flutter run -d edge --web-port 8888 --release
    
