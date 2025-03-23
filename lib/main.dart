@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
+import 'tinder.dart';
 
 void main() {
   setUrlStrategy(PathUrlStrategy());
@@ -581,8 +582,8 @@ class _AlbumObjectState extends State<AlbumObject>{
                         )
                     ),
                     SizedBox(
-                      height: 200,
                       width: 200,
+                      height: (allArtists.length - 1)*fontsizeCoArtist,
                       child:
                       GestureDetector(
                         onVerticalDragUpdate: (DragUpdateDetails details) {
@@ -607,6 +608,11 @@ class _AlbumObjectState extends State<AlbumObject>{
                         ),
                       ),
                     ),
+                    SizedBox(
+                      height: 100,
+                      width: 400,
+                      child: TinderAuth(),
+                    )
                   ],
                 ),
                 SizedBox(
